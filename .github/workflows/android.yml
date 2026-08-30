@@ -78,6 +78,33 @@ jobs:
           ./scripts/languagelist_updater.sh
           mkdir out
 
+      - name: Prepare release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            if [ -z "$GPLAY_KEYSTORE_PASSWORD" ]; then
+              echo "::error::KEYSTORE_BASE64 secret is set but GPLAY_KEYSTORE_PASSWORD is missing. Set both secrets."
+              exit 1
+            fi
+            echo "$KEYSTORE_BASE64" | base64 -d > app_pojavlauncher/aamc_upload.jks
+            echo "Using keystore from KEYSTORE_BASE64 secret (stable signature across releases)"
+          elif [ -z "$GPLAY_KEYSTORE_PASSWORD" ]; then
+            echo "No signing secrets configured - generating fork keystore so the release build can sign."
+            echo "For update-compatible signatures across releases, set repo secrets:"
+            echo "  KEYSTORE_BASE64 (base64 of a .jks) + GPLAY_KEYSTORE_PASSWORD"
+            keytool -genkeypair -v \
+              -keystore app_pojavlauncher/aamc_upload.jks \
+              -storepass amethyst-fork-release \
+              -keypass amethyst-fork-release \
+              -alias android_github_release \
+              -keyalg RSA -keysize 2048 -validity 10950 \
+              -dname "CN=Amethyst Fork Release, OU=Dev, O=pongb12, C=US"
+            echo "GPLAY_KEYSTORE_PASSWORD=amethyst-fork-release" >> "$GITHUB_ENV"
+          else
+            echo "Using tracked aamc_upload.jks with GPLAY_KEYSTORE_PASSWORD secret"
+          fi
+
       - name: Build Release .apk
         run: |
           # Build the launcher
@@ -109,3 +136,25 @@ jobs:
         with:
           name: app-release
           path: out/app-release.*
+
+  github-release:
+    runs-on: ubuntu-22.04
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download built APKs
+        uses: actions/download-artifact@v4
+        with:
+          path: out
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/app-release*/app-release.apk
+            out/app-release*/app-release.md5
+            out/app-debug*/app-debug.apk
+            out/app-debug*/app-debug.md5
+          generate_release_notes: true
