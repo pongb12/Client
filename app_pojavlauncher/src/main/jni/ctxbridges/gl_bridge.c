@@ -39,13 +39,35 @@ gl_render_window_t* gl_get_current() {
     return currentBundle;
 }
 
+/* Refresh the cached EGL surface dimensions of a bundle. Called whenever the
+ * EGL surface is (re)created in gl_swap_surface, the only point where the
+ * dimensions can change. */
+static void gl_query_surface_dimensions(gl_render_window_t* bundle) {
+    if(bundle->surface != NULL
+        && eglQuerySurface_p(g_EglDisplay, bundle->surface, EGL_WIDTH, &bundle->cached_surface_width) == EGL_TRUE
+        && eglQuerySurface_p(g_EglDisplay, bundle->surface, EGL_HEIGHT, &bundle->cached_surface_height) == EGL_TRUE) {
+        return;
+    }
+    bundle->cached_surface_width = 0;
+    bundle->cached_surface_height = 0;
+}
+
 static void gl4esi_get_display_dimensions(int* width, int* height) {
     if(currentBundle == NULL) goto zero;
-    EGLSurface surface = currentBundle->surface;
-    // Fetch dimensions from the EGL surface - the most reliable way
-    EGLBoolean result_width = eglQuerySurface_p(g_EglDisplay, surface, EGL_WIDTH, width);
-    EGLBoolean result_height = eglQuerySurface_p(g_EglDisplay, surface, EGL_HEIGHT, height);
-    if(!result_width || !result_height) goto zero;
+    // gl4es calls this callback often (viewport/validation paths), and each
+    // uncached call costs two eglQuerySurface driver round-trips - significant
+    // on weak GPUs like PowerVR GE8320. The EGL surface dimensions only change
+    // when the surface is recreated in gl_swap_surface, which refreshes the
+    // cache, so serving them from the bundle is equivalent and much cheaper.
+    *width = currentBundle->cached_surface_width;
+    *height = currentBundle->cached_surface_height;
+    if(*width == 0 && *height == 0 && currentBundle->surface != NULL) {
+        // Cache not populated yet (should not happen since gl_swap_surface
+        // always refreshes it) - do one fallback query instead of reporting 0.
+        gl_query_surface_dimensions(currentBundle);
+        *width = currentBundle->cached_surface_width;
+        *height = currentBundle->cached_surface_height;
+    }
     return;
 
     zero:
@@ -142,6 +164,9 @@ void gl_swap_surface(gl_render_window_t* bundle) {
         const EGLint pbuffer_attrs[] = {EGL_WIDTH, 1 , EGL_HEIGHT, 1, EGL_NONE};
         bundle->surface = eglCreatePbufferSurface_p(g_EglDisplay, bundle->config, pbuffer_attrs);
     }
+    // The surface was recreated: refresh the cached dimensions used by the
+    // gl4es main-FB-size callback, instead of querying EGL from it every time.
+    gl_query_surface_dimensions(bundle);
     //eglMakeCurrent_p(g_EglDisplay, bundle->surface, bundle->surface, bundle->context);
 }
 
@@ -160,7 +185,7 @@ void gl_make_current(gl_render_window_t* bundle) {
         pojav_environ->mainWindowBundle->newNativeSurface = pojav_environ->pojavWindow;
         hasSetMainWindow = true;
     }
-    LOGI("Making current, surface=%p, nativeSurface=%p, newNativeSurface=%p", bundle->surface, bundle->nativeSurface, bundle->newNativeSurface);
+    LOGD("Making current, surface=%p, nativeSurface=%p, newNativeSurface=%p", bundle->surface, bundle->nativeSurface, bundle->newNativeSurface);
     if(bundle->surface == NULL) { //it likely will be on the first run
         gl_swap_surface(bundle);
     }

@@ -157,13 +157,20 @@ void load_vulkan() {
 
 int pojavInitOpenGL() {
     // Only affects GL4ES as of now
+    // getenv() can legitimately return NULL (e.g. custom_env.txt stripped the
+    // variable); guard instead of dereferencing, and fall back to the historical
+    // GL4ES bridge when the renderer env var is absent.
     const char *forceVsync = getenv("FORCE_VSYNC");
-    if (strcmp(forceVsync, "true") == 0)
+    if (forceVsync != NULL && strcmp(forceVsync, "true") == 0)
         pojav_environ->force_vsync = true;
 
     // NOTE: Override for now.
     const char *renderer = getenv("AMETHYST_RENDERER");
-    if (strncmp("opengles", renderer, 8) == 0) {
+    if (renderer == NULL) {
+        printf("EGLBridge: AMETHYST_RENDERER not set, defaulting to GL4ES bridge\n");
+        pojav_environ->config_renderer = RENDERER_GL4ES;
+        set_gl_bridge_tbl();
+    } else if (strncmp("opengles", renderer, 8) == 0) {
         pojav_environ->config_renderer = RENDERER_GL4ES;
         if (!strcmp(renderer, "opengles3_desktopgl_zink_kopper")) {
             load_vulkan();

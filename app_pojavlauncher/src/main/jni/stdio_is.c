@@ -8,6 +8,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <time.h>
 #include <environ/environ.h>
 
 #include "stdio_is.h"
@@ -27,12 +28,27 @@ static jmethodID logger_onEventLogged;
 static volatile jobject logListener = NULL;
 static int latestlog_fd = -1;
 
+// Rate-limit fdatasync() of the log file: previously every recorded chunk forced
+// an eMMC commit, turning chatty Minecraft/mod logging into multi-millisecond
+// stalls on the logger thread (visible as game jank) plus needless flash wear on
+// low-end devices. The log data itself is still written immediately (so process
+// crashes never lose it in page cache); only the durability barrier is batched,
+// meaning at most this interval of log can be lost on a full OS/power crash.
+#define LATESTLOG_SYNC_INTERVAL_NS (2LL * 1000000000LL)
+static int64_t last_log_sync_time_ns = 0;
 
 static bool recordBuffer(char* buf, ssize_t len) {
     if(strstr(buf, "Session ID is")) return false;
     if(latestlog_fd != -1) {
         write(latestlog_fd, buf, len);
-        fdatasync(latestlog_fd);
+        struct timespec now;
+        if(clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
+            int64_t now_ns = (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
+            if(now_ns - last_log_sync_time_ns >= LATESTLOG_SYNC_INTERVAL_NS) {
+                fdatasync(latestlog_fd);
+                last_log_sync_time_ns = now_ns;
+            }
+        }
     }
     return true;
 }

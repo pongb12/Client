@@ -14,6 +14,11 @@ typedef struct {
     EGLint     format;
     EGLContext context;
     EGLSurface surface;
+    /* EGL surface dimensions, refreshed on every surface (re)creation. gl4es
+     * queries the main framebuffer size frequently, and each uncached query
+     * costs two eglQuerySurface driver round-trips. */
+    int        cached_surface_width;
+    int        cached_surface_height;
 } gl_render_window_t;
 
 bool gl_init();

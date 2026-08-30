@@ -320,7 +320,6 @@ public class CallbackBridge {
             // If the grab re-changed, skip notify process
             if(isGrabbing != grabbing) return;
 
-            System.out.println("Grab changed : " + grabbing);
             synchronized (grabListeners) {
                 for (GrabListener g : grabListeners) g.onGrabState(grabbing);
             }

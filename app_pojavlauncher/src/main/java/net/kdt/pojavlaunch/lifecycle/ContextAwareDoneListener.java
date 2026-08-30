@@ -67,7 +67,10 @@ public class ContextAwareDoneListener implements AsyncMinecraftDownloader.DoneLi
                 NotificationUtils.PENDINGINTENT_CODE_GAME_START,
                 NotificationUtils.NOTIFICATION_ID_GAME_START
         );
-        // You should keep yourself safe, NOW!
-        // otherwise android does weird things...
+        // The game runs in the separate :game process, and the notification lives in the
+        // system once posted, so the :launcher process has nothing left to do here. Free
+        // its RAM (tens of MB on a low-end device) instead of leaving it cached all
+        // session, mirroring what executeWithActivity already does on the normal path.
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
 }

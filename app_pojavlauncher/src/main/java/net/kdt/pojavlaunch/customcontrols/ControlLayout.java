@@ -368,7 +368,6 @@ public class ControlLayout extends FrameLayout {
 
 		//Optimization pass to avoid looking at all children again
 		if (lastControlButton != null) {
-			System.out.println("last control button check" + ev.getX() + "-" + ev.getY() + "-" + lastControlButton.getControlView().getX() + "-" + lastControlButton.getControlView().getY());
 			if (ev.getX() > lastControlButton.getControlView().getX()
 					&& ev.getX() < lastControlButton.getControlView().getX() + lastControlButton.getControlView().getWidth()
 					&& ev.getY() > lastControlButton.getControlView().getY()

@@ -1,8 +1,5 @@
 package net.kdt.pojavlaunch.prefs.screens;
 
-import static net.kdt.pojavlaunch.Architecture.is32BitsDevice;
-import static net.kdt.pojavlaunch.Tools.getTotalDeviceMemory;
-
 import android.os.Bundle;
 import android.widget.TextView;
 
@@ -18,6 +15,7 @@ import net.kdt.pojavlaunch.contracts.OpenDocumentWithExtension;
 import net.kdt.pojavlaunch.multirt.MultiRTConfigDialog;
 import net.kdt.pojavlaunch.prefs.CustomSeekBarPreference;
 import net.kdt.pojavlaunch.prefs.LauncherPreferences;
+import net.kdt.pojavlaunch.utils.DeviceCapabilityDetector;
 
 public class LauncherPreferenceJavaFragment extends LauncherPreferenceFragment {
     private MultiRTConfigDialog mDialogScreen;
@@ -44,13 +42,22 @@ public class LauncherPreferenceJavaFragment extends LauncherPreferenceFragment {
         CustomSeekBarPreference memorySeekbar = requirePreference("allocation",
                 CustomSeekBarPreference.class);
 
-        int maxRAM;
-        int deviceRam = getTotalDeviceMemory(memorySeekbar.getContext());
+        // Capability-based ceiling: the max heap must leave Android, the GPU driver
+        // and zRAM enough RAM to breathe on low-end devices.
+        int maxRAM = DeviceCapabilityDetector.getRamAllocationCeilingMb(memorySeekbar.getContext());
+        int sliderMin = getResources().getInteger(R.integer.memory_seekbar_min);
 
-        if(is32BitsDevice() || deviceRam < 2048) maxRAM = Math.min(1024, deviceRam);
-        else maxRAM = deviceRam - (deviceRam < 3064 ? 800 : 1024); //To have a minimum for the device to breathe
+        // CustomSeekBarPreference stores (rawProgress + min); reduce the raw max so the
+        // displayed value can never exceed the real ceiling.
+        memorySeekbar.setMaxKeepIncrement(Math.max(0, maxRAM - sliderMin));
 
-        memorySeekbar.setMaxKeepIncrement(maxRAM);
+        // Self-heal installs that saved an over-allocation before the ceiling existed.
+        if (ramAllocation > maxRAM) {
+            ramAllocation = maxRAM;
+            LauncherPreferences.DEFAULT_PREF.edit().putInt("allocation", maxRAM).apply();
+            LauncherPreferences.PREF_RAM_ALLOCATION = maxRAM;
+        }
+
         memorySeekbar.setValue(ramAllocation);
         memorySeekbar.setSuffix(" MB");
 

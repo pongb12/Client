@@ -335,7 +335,7 @@ public class JREUtils {
         purgeArg(userArgs, "-Dorg.lwjgl.opengl.libname");
         // Don't let the user specify a custom Freetype library (as the user is unlikely to specify a version compiled for Android)
         purgeArg(userArgs, "-Dorg.lwjgl.freetype.libname");
-        // Overridden by us to specify the exact number of cores that the android system has
+        // Overridden by us to give the JVM a hardware-appropriate parallelism
         purgeArg(userArgs, "-XX:ActiveProcessorCount");
 
         //Add automatically generated args
@@ -352,8 +352,10 @@ public class JREUtils {
         // We don't have jemalloc for our LWJGL so set the allocator to system to avoid error logs
         userArgs.add("-Dorg.lwjgl.system.allocator=system");
 
-        // Some phones are not using the right number of cores, fix that
-        userArgs.add("-XX:ActiveProcessorCount=" + java.lang.Runtime.getRuntime().availableProcessors());
+        // On low-RAM, all-little-core devices, an 8-way JVM (GC/JIT/ForkJoin/MC worker
+        // threads sized from this value) oversubscribes the weak cores and competes for
+        // memory bandwidth. Capability-based cap: 2 CPUs on <=2 GB, 4 on <=4 GB devices.
+        userArgs.add("-XX:ActiveProcessorCount=" + DeviceCapabilityDetector.getRecommendedJvmProcessorCount(activity));
         // Adds/changes methods for compatibility
         userArgs.add("-javaagent:"+new File(Tools.DIR_DATA,"MioLibPatcher/MioLibPatcher.jar").getAbsolutePath());
         userArgs.add("-Dmiolibpatcher.alc10=true");

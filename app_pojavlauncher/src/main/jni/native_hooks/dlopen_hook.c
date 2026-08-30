@@ -6,6 +6,7 @@
 #include <bytehook.h>
 #include <dlfcn.h>
 #include <jni.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 // WARNING: Hooking dlopen and dlsym does not work for all devices, seems to be a conflict with
@@ -45,6 +46,12 @@ static const char *redirect_dlopen_path(const char *filename) {
 }
 
 static void *sdl3_handle = NULL;
+// SDL3 is only present when an SDL-based mod ships it. Without this flag, every
+// dlsym call made while libSDL3.so is absent (LWJGL FunctionProvider resolves
+// hundreds of symbols, plus JVM/renderer lookups) redoes a full failed library
+// search on the linker - measurable startup overhead. The probe result is
+// memoized; custom_dlopen() still records the handle if SDL3 loads later.
+static bool sdl3_handle_missing = false;
 
 static JNI_OnLoad_t orig_sdl3_JNI_OnLoad;
 
@@ -90,7 +97,10 @@ void *custom_dlsym(void *handle, const char *symbol) {
             handle,
             symbol);
     BYTEHOOK_POP_STACK();
-    if (sdl3_handle == NULL) sdl3_handle = dlopen("libSDL3.so", RTLD_LOCAL | RTLD_NOW);
+    if (sdl3_handle == NULL && !sdl3_handle_missing) {
+        sdl3_handle = dlopen("libSDL3.so", RTLD_LOCAL | RTLD_NOW);
+        if (sdl3_handle == NULL) sdl3_handle_missing = true;
+    }
 
     if (sdl3_handle && handle == sdl3_handle && strcmp(symbol, "JNI_OnLoad") == 0) {
         orig_sdl3_JNI_OnLoad = (JNI_OnLoad_t) result;

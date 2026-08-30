@@ -67,6 +67,7 @@ import net.kdt.pojavlaunch.plugins.FFmpegPlugin;
 import net.kdt.pojavlaunch.prefs.LauncherPreferences;
 import net.kdt.pojavlaunch.tasks.AsyncAssetManager;
 import net.kdt.pojavlaunch.utils.DateUtils;
+import net.kdt.pojavlaunch.utils.DeviceCapabilityDetector;
 import net.kdt.pojavlaunch.utils.DownloadUtils;
 import net.kdt.pojavlaunch.utils.FileUtils;
 import net.kdt.pojavlaunch.utils.GLInfoUtils;
@@ -106,6 +107,7 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -488,6 +490,22 @@ public final class Tools {
         javaArgList.add("-Djava.library.path="+javaLibraryPath);
 
         javaArgList.addAll(Arrays.asList(getMinecraftJVMArgs(versionId, gamedir)));
+
+        // Low-RAM G1 adjustment: Mojang's version JSON ships -XX:G1HeapRegionSize=32M,
+        // sized for desktop multi-GB heaps. On a <= 2 GB heap that leaves only ~35 G1
+        // regions (G1 ergonomics target ~2048), which makes evacuation granularity and
+        // eden resizing coarse and GC behavior less predictable. Removing the flag lets
+        // HotSpot derive a region size from the actual small heap instead. Applied only
+        // on capability-detected low-RAM hardware with a small heap; revert if an
+        // on-device A/B benchmark shows a regression.
+        if (LauncherPreferences.PREF_RAM_ALLOCATION <= 2048
+                && DeviceCapabilityDetector.isLowRamHardware(activity)) {
+            Iterator<String> argIt = javaArgList.iterator();
+            while (argIt.hasNext()) {
+                if (argIt.next().startsWith("-XX:G1HeapRegionSize=")) argIt.remove();
+            }
+        }
+
         javaArgList.add("-cp"); javaArgList.add(launchClasspath);
 
         // Some modloaders (babric) don't fully respect java.libary.path and only use the native lib dir
@@ -579,6 +597,17 @@ public final class Tools {
                     // Looks for controllable_natives/SDL/<sdl_version_number>/libSDL2.so and
                     // deletes it. We can assume array index 0 because this dir gets fully deleted
                     // before the loop is started.
+                    // NOTE: each iteration used to run back-to-back with no sleep, i.e. one
+                    // core spun at 100% calling listFiles() for the entire session. The mod's
+                    // extraction happens on a startup timescale, so a 100 ms poll interval is
+                    // still ~an order of magnitude faster than needed, and leaves the (weak)
+                    // cores to the game.
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                     if (deleted.isDirectory()) {
                         if (deleted.listFiles().length > 0) {
                             if (deleted.listFiles()[0].listFiles().length > 0) {

@@ -49,8 +49,10 @@ public class LoggerView extends ConstraintLayout {
         inflate(getContext(), R.layout.view_logger, this);
         mLogTextView = findViewById(R.id.content_log_view);
         mLogTextView.setTypeface(Typeface.MONOSPACE);
-        //TODO clamp the max text so it doesn't go oob
-        mLogTextView.setMaxLines(Integer.MAX_VALUE);
+        // Cap the retained log lines: an unbounded TextView made the in-game log
+        // window progressively slower to append/layout (O(n) text per line) on
+        // low-end devices; 2000 lines is ample for live diagnostics.
+        mLogTextView.setMaxLines(2000);
         mLogTextView.setEllipsize(null);
         mLogTextView.setVisibility(GONE);
 
