@@ -106,6 +106,10 @@ public class JREUtils {
             @Override
             public void run() {
                 try {
+                    // Non-root RAM optimization: this thread only relays logcat
+                    // output; it must never compete with the game for CPU time
+                    // on low-end devices.
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
                     if (logcatPb == null) {
                         // No filtering by tag anymore as that relied on incorrect log levels set in log.h
                         logcatPb = new ProcessBuilder().command("logcat", /* "-G", "1mb", */ "-v", "brief", "-s", "jrelog", "LIBGL", "NativeInput").redirectErrorStream(true);
@@ -170,7 +174,7 @@ public class JREUtils {
                 .append("/vendor/").append(libName).append("/hw:")
                 .append(NATIVE_LIB_DIR);
         // FIXME: Freetype is shipped inside lwjgl. We should ship it outside and use lwjgl native jars instead.
-        String lwjglVer = Tools.sLwjglVersion == null ? "3.3.3" : Tools.sLwjglVersion;
+        String lwjglVer = Tools.sLwjglVersion == null ? "3.3.3" : Tools.getLwjglNativesVersionFor(Tools.sLwjglVersion);
         ldLibraryPath.append(String.format(":%s/lwjgl-%s-natives/%s", Tools.DIR_DATA, lwjglVer, archAsStringAndroid(getDeviceArchitecture())));
         LD_LIBRARY_PATH = ldLibraryPath.toString();
     }
@@ -339,8 +343,8 @@ public class JREUtils {
         purgeArg(userArgs, "-XX:ActiveProcessorCount");
 
         //Add automatically generated args
-        userArgs.add("-Xms" + LauncherPreferences.PREF_RAM_ALLOCATION + "M");
-        userArgs.add("-Xmx" + LauncherPreferences.PREF_RAM_ALLOCATION + "M");
+        userArgs.add("-Xms" + Tools.getEffectiveRamAllocationMb() + "M");
+        userArgs.add("-Xmx" + Tools.getEffectiveRamAllocationMb() + "M");
         if(LOCAL_RENDERER != null) userArgs.add("-Dorg.lwjgl.opengl.libname=" + graphicsLib);
 
         // Force LWJGL to use the Freetype library intended for it, instead of using the one
@@ -361,7 +365,7 @@ public class JREUtils {
         userArgs.add("-Dmiolibpatcher.alc10=true");
 
         userArgs.addAll(JVMArgs);
-        activity.runOnUiThread(() -> Toast.makeText(activity, activity.getString(R.string.autoram_info_msg,LauncherPreferences.PREF_RAM_ALLOCATION), Toast.LENGTH_SHORT).show());
+        activity.runOnUiThread(() -> Toast.makeText(activity, activity.getString(R.string.autoram_info_msg, Tools.getEffectiveRamAllocationMb()), Toast.LENGTH_SHORT).show());
         System.out.println(JVMArgs);
 
         initJavaRuntime(runtimeHome);

@@ -518,4 +518,21 @@
     <string name="import_modpack_json">Reading modpack info…</string>
     <string name="import_modpack_copy">Copying modpack file to cache… (%s MB/ %s MB)</string>
 
+    <!-- Non-root RAM optimization (experimental) -->
+    <string name="ram_optimization_category">RAM optimization (non-root, experimental)</string>
+    <string name="ram_risk_warning_title">Experimental RAM features</string>
+    <string name="ram_risk_warning">These options change how the game and the launcher use your device memory.\n\nThey are safe for your device (no root, no system settings are modified), but on low-RAM phones an automatically sized heap or a non-default garbage collector can make the game crash earlier, run slower, or exit unexpectedly instead of pushing the system into memory starvation.\n\nIf you enable them, you accept full responsibility for possible game crashes or data loss inside the game. You can switch them off at any time.</string>
+    <string name="ram_risk_accept">I understand, I assume responsibility</string>
+    <string name="ram_function_confirm_title">Enable this RAM function?</string>
+    <string name="ram_function_confirm_auto">The heap (-Xmx) will be computed at every launch as: available RAM minus a 650-1000 MB reserve for Android and graphics drivers. If the result is unsafe the manual value is used. The game may crash if the computed heap ends up too small.</string>
+    <string name="ram_function_confirm_gc">The launcher will inject its own garbage collector flags into the game JVM. If the selected collector is not supported by your Java runtime, the launcher automatically falls back to a tuned G1 setup. Stability may vary between devices.</string>
+    <string name="ram_aggressive_cleanup_title">Aggressive launcher cleanup on Play</string>
+    <string name="ram_aggressive_cleanup_subtitle">Run a garbage collection pass and lower the launcher process priority right before the game starts, and again when the launcher goes to the background. The launcher holds no large image cache, so the effect is modest; disable if you notice nothing.</string>
+    <string name="ram_auto_allocation_title">Automatic heap size (-Xmx)</string>
+    <string name="ram_auto_allocation_subtitle">Compute the heap at launch: SafeXmx = available RAM - 650-1000 MB native reserve (Android OS, GPU driver, LWJGL native memory). Falls back to the manual slider when the result is not safe. Overrides the Memory allocation slider.</string>
+    <string name="ram_gc_profile_title">Garbage collector profile</string>
+    <string name="ram_gc_profile_subtitle">Inject tuned GC flags: G1 for small heaps, or Shenandoah (compact heuristics, returns memory to the OS) when the selected runtime supports it. Unsupported runtimes fall back to G1 automatically.</string>
+    <string name="ram_foreground_service_info">Foreground service: already built in. While the game runs, a persistent notification-backed foreground service keeps the game process out of reach of the Android low-memory killer without root.</string>
+    <string name="ram_gc_unsupported_runtime">Shenandoah is not supported by the selected Java runtime (%s); using the tuned G1 profile instead.</string>
+
 </resources>

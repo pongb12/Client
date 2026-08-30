@@ -288,6 +288,15 @@ public class LauncherActivity extends BaseActivity {
     }
 
     @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        // Non-root RAM optimization: when the launcher UI goes to the
+        // background (or the system gets starved), release the memory the
+        // launcher holds so background kill pressure stays low.
+        net.kdt.pojavlaunch.utils.MemoryReleaseManager.onTrimMemory(level);
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_pojav_launcher);
