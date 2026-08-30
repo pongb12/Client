@@ -37,5 +37,34 @@
             
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/ram_optimization_category">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="ramAggressiveCleanup"
+            android:summary="@string/ram_aggressive_cleanup_subtitle"
+            android:title="@string/ram_aggressive_cleanup_title"/>
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="autoRamAllocation"
+            android:summary="@string/ram_auto_allocation_subtitle"
+            android:title="@string/ram_auto_allocation_title"/>
+
+        <ListPreference
+            android:defaultValue="default"
+            android:entries="@array/ram_gc_profile_names"
+            android:entryValues="@array/ram_gc_profile_values"
+            android:key="ramGcProfile"
+            android:summary="@string/ram_gc_profile_subtitle"
+            android:title="@string/ram_gc_profile_title"/>
+
+        <Preference
+            android:key="ram_foreground_service_info"
+            android:selectable="false"
+            android:summary="@string/ram_foreground_service_info"/>
+
+    </PreferenceCategory>
+
 
 </PreferenceScreen>

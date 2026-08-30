@@ -28,13 +28,13 @@ public class LauncherPreferences {
 
     public static SharedPreferences DEFAULT_PREF;
 
-	public static boolean PREF_IGNORE_NOTCH = false;
-	public static int PREF_NOTCH_SIZE = 0;
-	public static float PREF_BUTTONSIZE = 100f;
-	public static float PREF_MOUSESCALE = 1f;
-	public static int PREF_LONGPRESS_TRIGGER = 300;
-	public static String PREF_DEFAULTCTRL_PATH = Tools.CTRLDEF_FILE;
-	public static String PREF_CUSTOM_JAVA_ARGS;
+        public static boolean PREF_IGNORE_NOTCH = false;
+        public static int PREF_NOTCH_SIZE = 0;
+        public static float PREF_BUTTONSIZE = 100f;
+        public static float PREF_MOUSESCALE = 1f;
+        public static int PREF_LONGPRESS_TRIGGER = 300;
+        public static String PREF_DEFAULTCTRL_PATH = Tools.CTRLDEF_FILE;
+        public static String PREF_CUSTOM_JAVA_ARGS;
     public static boolean PREF_FORCE_ENGLISH = false;
     public static final String PREF_VERSION_REPOS = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
     public static boolean PREF_CHECK_LIBRARY_SHA = true;
@@ -75,6 +75,16 @@ public class LauncherPreferences {
     public static boolean PREF_MOUSE_GRAB_FORCE = false;
     public static boolean PREF_KEYBOARD_PANNING = true;
 
+    // ---- Non-root RAM optimization (experimental) ----
+    /** GC + priority cleanup on Play and on UI-hidden trim events. */
+    public static boolean PREF_RAM_AGGRESSIVE_CLEANUP = false;
+    /** Compute -Xmx from availMem - native reserve instead of the slider. */
+    public static boolean PREF_AUTO_RAM_ALLOCATION = false;
+    /** GC profile: MemoryOptimizer.GC_PROFILE_DEFAULT / G1 / SHENANDOAH. */
+    public static String PREF_RAM_GC_PROFILE;
+    /** Risk-dialog acknowledgment for the RAM optimization settings. */
+    public static final String PREF_KEY_RAM_RISK_ACK = "ramRiskAckV1";
+
 
     public static void loadPreferences(Context ctx) {
         //Required for CTRLDEF_FILE and MultiRT
@@ -85,7 +95,7 @@ public class LauncherPreferences {
         PREF_MOUSESCALE = DEFAULT_PREF.getInt("mousescale", 100)/100f;
         PREF_MOUSESPEED = ((float)DEFAULT_PREF.getInt("mousespeed",100))/100f;
         PREF_IGNORE_NOTCH = DEFAULT_PREF.getBoolean("ignoreNotch", false);
-		PREF_LONGPRESS_TRIGGER = DEFAULT_PREF.getInt("timeLongPressTrigger", 300);
+                PREF_LONGPRESS_TRIGGER = DEFAULT_PREF.getInt("timeLongPressTrigger", 300);
         PREF_FORCE_ENGLISH = DEFAULT_PREF.getBoolean("force_english", false);
         PREF_CHECK_LIBRARY_SHA = DEFAULT_PREF.getBoolean("checkLibraries",true);
         PREF_DISABLE_GESTURES = DEFAULT_PREF.getBoolean("disableGestures",false);
@@ -118,6 +128,9 @@ public class LauncherPreferences {
         PREF_TOUCHCONTROLLER_VIBRATE_LENGTH = DEFAULT_PREF.getInt("touchControllerVibrateLength", 100);
         PREF_MOUSE_GRAB_FORCE = DEFAULT_PREF.getBoolean("always_grab_mouse", false);
         PREF_KEYBOARD_PANNING = DEFAULT_PREF.getBoolean("keyboardPanning", true);
+        PREF_RAM_AGGRESSIVE_CLEANUP = DEFAULT_PREF.getBoolean("ramAggressiveCleanup", false);
+        PREF_AUTO_RAM_ALLOCATION = DEFAULT_PREF.getBoolean("autoRamAllocation", false);
+        PREF_RAM_GC_PROFILE = DEFAULT_PREF.getString("ramGcProfile", net.kdt.pojavlaunch.utils.MemoryOptimizer.GC_PROFILE_DEFAULT);
 
         // User may have deleted their default control
         String userDefCtrl = DEFAULT_PREF.getString("defaultCtrl", Tools.CTRLDEF_FILE);

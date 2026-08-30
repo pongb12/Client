@@ -74,6 +74,7 @@ import net.kdt.pojavlaunch.utils.GLInfoUtils;
 import net.kdt.pojavlaunch.utils.JREUtils;
 import net.kdt.pojavlaunch.utils.JSONUtils;
 import net.kdt.pojavlaunch.utils.MCOptionUtils;
+import net.kdt.pojavlaunch.utils.MemoryOptimizer;
 import net.kdt.pojavlaunch.utils.OldVersionsUtils;
 import net.kdt.pojavlaunch.value.DependentLibrary;
 import net.kdt.pojavlaunch.value.MinecraftAccount;
@@ -151,6 +152,74 @@ public final class Tools {
     private static RenderersList sCompatibleRenderers;
     public static int iLwjglVersion = 0;
     public static String sLwjglVersion = null;
+
+    /**
+     * Resolve which LWJGL bundle the launcher will actually use for a game.
+     *
+     * The Android LWJGL port (with its Android-specific memory management)
+     * only ships bundled as 3.3.3 and 3.4.1; an authentic Android build of
+     * 3.3.1 does not exist upstream (checked PojavLauncher, Amethyst, Zalith
+     * and FCL as of 2026), and desktop 3.3.1 jars cannot be used because they
+     * lack the Android MemoryUtil/MemoryAccess backends.
+     *
+     * - When the game requests a 3.4.x+ version, the 3.4.1 bundle is used.
+     * - Everything from 3.2.0 up to 3.4.0 (including 3.3.1, required by
+     *   Minecraft 1.19.4..1.20.4) runs on the 3.3.3 bundle, which is
+     *   API-compatible within the 3.3 line. The exact requested version and
+     *   the mapping are written to the game log for transparency.
+     * - Advanced users can drop an authentic Android 3.3.1 build into
+     *   files/<gamedir or home>/lwjgl3-custom/3.3.1/ (same layout as the
+     *   bundled lwjgl3/3.3.3 folder: lwjgl.jar, lwjgl-<version>-merged-modules.jar,
+     *   lwjgl-lwjglx.jar + module jars); it then takes priority.
+     *
+     * @param requiredVersion LWJGL version encoded as an integer (e.g. 331 for 3.3.1)
+     * @return the bundle (folder) name to use
+     */
+    public static String resolveLwjglBundleVersion(int requiredVersion) {
+        String formatted = formatLwjglVersion(requiredVersion);
+        if (isCompleteLwjglBundle(new File(DIR_GAME_HOME, "lwjgl3-custom/" + formatted), formatted)) {
+            Logger.appendToLog("Info: LWJGL " + formatted + " requested, using the custom Android bundle in lwjgl3-custom/" + formatted);
+            return formatted;
+        }
+        if (requiredVersion >= 341) {
+            Logger.appendToLog("Info: LWJGL " + formatted + " requested, using the bundled 3.4.1 Android port");
+            return "3.4.1";
+        }
+        if (requiredVersion >= 320) {
+            Logger.appendToLog("Info: LWJGL " + formatted + " requested, using the bundled 3.3.3 Android port (API-compatible within the 3.3 line)");
+            return "3.3.3";
+        }
+        // 3.2.x-era games run on the 3.3.3 bundle through the lwjglx shim
+        Logger.appendToLog("Info: LWJGL " + formatted + " requested, using the bundled 3.3.3 Android port");
+        return "3.3.3";
+    }
+
+    /** Turn 331 into "3.3.1". Input is guaranteed 200..999 by the caller. */
+    public static String formatLwjglVersion(int encoded) {
+        return (encoded / 100) + "." + ((encoded / 10) % 10) + "." + (encoded % 10);
+    }
+
+    /**
+     * Natives folder to use for a given bundle: the custom (e.g. 3.3.1) jars
+     * are still native-loaded through the bundled 3.3.3 Android natives.
+     */
+    public static String getLwjglNativesVersionFor(String bundleVersion) {
+        return "3.3.1".equals(bundleVersion) ? "3.3.3" : bundleVersion;
+    }
+
+    private static File resolveLwjgl3Folder(String fallbackBundleVersion) {
+        if (sLwjglVersion != null) {
+            File custom = new File(DIR_GAME_HOME, "lwjgl3-custom/" + sLwjglVersion);
+            if (isCompleteLwjglBundle(custom, sLwjglVersion)) return custom;
+        }
+        return new File(DIR_GAME_HOME, "lwjgl3/" + fallbackBundleVersion);
+    }
+
+    private static boolean isCompleteLwjglBundle(File folder, String bundleName) {
+        return new File(folder, "lwjgl.jar").isFile()
+                && new File(folder, "lwjgl-" + bundleName + "-merged-modules.jar").isFile()
+                && new File(folder, "lwjgl-lwjglx.jar").isFile();
+    }
     public static String lwjglNativesDir = null;
 
 
@@ -404,6 +473,10 @@ public final class Tools {
 
     public static void launchMinecraft(final AppCompatActivity activity, MinecraftAccount minecraftAccount,
                                        MinecraftProfile minecraftProfile, String versionId, int versionJavaRequirement) throws Throwable {
+        // Effective heap: when automatic allocation is enabled the -Xmx is
+        // recomputed at every launch from availMem - native reserve; otherwise
+        // the manual slider value is used as-is.
+        sEffectiveRamAllocationMb = computeEffectiveRamAllocationMb(activity);
         int freeDeviceMemory = getFreeDeviceMemory(activity);
         int localeString;
         int freeAddressSpace = Architecture.is32BitsDevice() ? getMaxContinuousAddressSpaceSize() : -1;
@@ -415,10 +488,10 @@ public final class Tools {
             localeString = R.string.memory_warning_msg;
         }
 
-        if(LauncherPreferences.PREF_RAM_ALLOCATION > freeDeviceMemory) {
+        if(sEffectiveRamAllocationMb > freeDeviceMemory) {
             int finalDeviceMemory = freeDeviceMemory;
             LifecycleAwareAlertDialog.DialogCreator dialogCreator = (dialog, builder) ->
-                builder.setMessage(activity.getString(localeString, finalDeviceMemory, LauncherPreferences.PREF_RAM_ALLOCATION))
+                builder.setMessage(activity.getString(localeString, finalDeviceMemory, sEffectiveRamAllocationMb))
                         .setPositiveButton(android.R.string.ok, (d, w)->{});
 
             if(LifecycleAwareAlertDialog.haltOnDialog(activity.getLifecycle(), activity, dialogCreator)) {
@@ -491,6 +564,23 @@ public final class Tools {
 
         javaArgList.addAll(Arrays.asList(getMinecraftJVMArgs(versionId, gamedir)));
 
+        // Non-root RAM optimization: inject the selected GC profile. Flags go
+        // AFTER Mojang's args so the last -XX:+UseG1GC-style flag wins, and so
+        // a user-provided -XX:+Use<Collector>GC in the profile javaArgs still
+        // ends up later in the list (JVM args are last-one-wins).
+        boolean shenandoahSupported = false;
+        if (MemoryOptimizer.needsShenandoahProbe(LauncherPreferences.PREF_RAM_GC_PROFILE)) {
+            shenandoahSupported = runtimeSupportsShenandoah(MultiRTUtils.getRuntimeHome(runtime.name));
+            if (!shenandoahSupported) {
+                Logger.appendToLog("Info: Shenandoah is not supported by runtime '" + runtime.name + "', falling back to tuned G1");
+            }
+        }
+        javaArgList.addAll(MemoryOptimizer.buildGcFlags(
+                runtime.javaVersion,
+                LauncherPreferences.PREF_RAM_GC_PROFILE,
+                shenandoahSupported,
+                is64BitRuntime(runtime)));
+
         // Low-RAM G1 adjustment: Mojang's version JSON ships -XX:G1HeapRegionSize=32M,
         // sized for desktop multi-GB heaps. On a <= 2 GB heap that leaves only ~35 G1
         // regions (G1 ergonomics target ~2048), which makes evacuation granularity and
@@ -498,7 +588,7 @@ public final class Tools {
         // HotSpot derive a region size from the actual small heap instead. Applied only
         // on capability-detected low-RAM hardware with a small heap; revert if an
         // on-device A/B benchmark shows a regression.
-        if (LauncherPreferences.PREF_RAM_ALLOCATION <= 2048
+        if (sEffectiveRamAllocationMb <= 2048
                 && DeviceCapabilityDetector.isLowRamHardware(activity)) {
             Iterator<String> argIt = javaArgList.iterator();
             while (argIt.hasNext()) {
@@ -927,9 +1017,10 @@ public final class Tools {
         StringBuilder launchClasspath = new StringBuilder(); //versnDir + "/" + version + "/" + version + ".jar:";
         String libClasspath = getLibClasspath(info); // Sets lwjglVersion, janky, but we can't get it any simpler
         String internalLwjglVersion = iLwjglVersion >= 341 ? "3.4.1" : "3.3.3";
-        File lwjgl3Folder = new File(Tools.DIR_GAME_HOME, "lwjgl3/"+internalLwjglVersion);
+        File lwjgl3Folder = resolveLwjgl3Folder(internalLwjglVersion);
+        String bundleName = lwjgl3Folder.getName();
         String lwjglCore = lwjgl3Folder.getAbsolutePath() + "/lwjgl.jar";
-        String lwjglMerged = lwjgl3Folder.getAbsolutePath() + "/lwjgl-"+internalLwjglVersion+"-merged-modules.jar";
+        String lwjglMerged = lwjgl3Folder.getAbsolutePath() + "/lwjgl-"+bundleName+"-merged-modules.jar";
         String lwjglxFile = lwjgl3Folder + "/lwjgl-lwjglx.jar";
 
         if (!new File(lwjglCore).exists() || !new File(lwjglMerged).exists() || !new File(lwjglxFile).exists()) {
@@ -947,7 +1038,7 @@ public final class Tools {
                 pathname.getName().endsWith(".jar") &&
                 // Exclude our three special jars which goes first, second and last
                 !pathname.getName().equals("lwjgl.jar") &&
-                !pathname.getName().equals("lwjgl-"+internalLwjglVersion+"-merged-modules.jar") &&
+                !pathname.getName().equals("lwjgl-"+bundleName+"-merged-modules.jar") &&
                 !pathname.getName().endsWith("lwjglx.jar"));
 
         if (lwjglModules != null) {
@@ -1279,8 +1370,8 @@ public final class Tools {
         }
         // Scary message, but we aren't getting LWJGL 1.9.9 or 3.10.100 any time soon
         if (iLwjglVersion < 200 || iLwjglVersion > 999) throw new RuntimeException("Unable to determine LWJGL version, JSON may be corrupt.");
-        sLwjglVersion = iLwjglVersion >= 341 ? "3.4.1" : "3.3.3";
-        lwjglNativesDir = String.format("%s/lwjgl-%s-natives/%s", Tools.DIR_DATA, sLwjglVersion, archAsStringAndroid(getDeviceArchitecture()));
+        sLwjglVersion = resolveLwjglBundleVersion(iLwjglVersion);
+        lwjglNativesDir = String.format("%s/lwjgl-%s-natives/%s", Tools.DIR_DATA, getLwjglNativesVersionFor(sLwjglVersion), archAsStringAndroid(getDeviceArchitecture()));
         return libDir.toArray(new String[0]);
     }
 
@@ -1442,7 +1533,8 @@ public final class Tools {
         Logger.appendToLog("Info: Architecture: " + Architecture.archAsString(DEVICE_ARCHITECTURE));
         Logger.appendToLog("Info: Device model: " + Build.MANUFACTURER + " " +Build.MODEL);
         Logger.appendToLog(String.format("Info: Total RAM: %s MB", deviceRam != 0 ? deviceRam : "unavailable"));
-        Logger.appendToLog("Info: Allocated RAM: " + LauncherPreferences.PREF_RAM_ALLOCATION + "MB");
+        Logger.appendToLog("Info: Allocated RAM: " + getEffectiveRamAllocationMb() + "MB"
+                + (LauncherPreferences.PREF_AUTO_RAM_ALLOCATION ? " (automatic)" : ""));
         Logger.appendToLog("Info: API version: " + SDK_INT);
         Logger.appendToLog("Info: Selected Minecraft version: " + gameVersion);
         Logger.appendToLog("Info: Custom Java arguments: \"" + javaArguments + "\"");
@@ -1496,6 +1588,91 @@ public final class Tools {
         ActivityManager.MemoryInfo memInfo = new ActivityManager.MemoryInfo();
         actManager.getMemoryInfo(memInfo);
         return (int) (memInfo.availMem / 1048576L);
+    }
+
+    /**
+     * Heap size actually used for the current launch. Set at the start of
+     * launchMinecraft(); falls back to the manual slider before that.
+     */
+    public static volatile int sEffectiveRamAllocationMb = -1;
+
+    public static int getEffectiveRamAllocationMb() {
+        return sEffectiveRamAllocationMb > 0 ? sEffectiveRamAllocationMb : LauncherPreferences.PREF_RAM_ALLOCATION;
+    }
+
+    /**
+     * Compute the effective allocation early (e.g. for logging before the
+     * actual launch). launchMinecraft() recomputes it right before applying.
+     */
+    public static void ensureEffectiveRamAllocationComputed(Context ctx) {
+        if (sEffectiveRamAllocationMb < 0) sEffectiveRamAllocationMb = computeEffectiveRamAllocationMb(ctx);
+    }
+
+    private static int computeEffectiveRamAllocationMb(Context ctx) {
+        if (!LauncherPreferences.PREF_AUTO_RAM_ALLOCATION) return LauncherPreferences.PREF_RAM_ALLOCATION;
+        long addressSpaceLimitMb = -1;
+        if (Architecture.is32BitsDevice()) {
+            int addressSpace = getMaxContinuousAddressSpaceSize();
+            if (addressSpace > 0) addressSpaceLimitMb = addressSpace;
+        }
+        int computed = MemoryOptimizer.computeAutoXmxMb(
+                getFreeDeviceMemory(ctx),
+                getTotalDeviceMemory(ctx),
+                Architecture.is32BitsDevice(),
+                addressSpaceLimitMb,
+                DeviceCapabilityDetector.getRamAllocationCeilingMb(ctx),
+                LauncherPreferences.PREF_RAM_ALLOCATION);
+        if (computed != LauncherPreferences.PREF_RAM_ALLOCATION) {
+            Logger.appendToLog("Info: Auto RAM allocation: " + computed + "MB (manual value: "
+                    + LauncherPreferences.PREF_RAM_ALLOCATION + "MB)");
+        }
+        return computed;
+    }
+
+    /** Probe the selected runtime for Shenandoah GC support by looking for
+     * its marker string inside libjvm.so (HotSpot builds that ship Shenandoah
+     * always contain it; builds without it fail the JVM if we pass the flags). */
+    public static boolean runtimeSupportsShenandoah(File runtimeHome) {
+        File libRoot = new File(runtimeHome, "lib");
+        File[] candidates = libRoot.listFiles(File::isDirectory);
+        if (candidates != null) {
+            for (File dir : candidates) {
+                File libjvm = new File(dir, "libjvm.so");
+                if (libjvm.isFile() && fileContainsAscii(libjvm, "Shenandoah")) return true;
+            }
+        }
+        File direct = new File(libRoot, "libjvm.so");
+        return direct.isFile() && fileContainsAscii(direct, "Shenandoah");
+    }
+
+    private static boolean fileContainsAscii(File file, String needle) {
+        final byte[] pattern = needle.getBytes(StandardCharsets.US_ASCII);
+        try (InputStream is = new BufferedInputStream(new FileInputStream(file))) {
+            byte[] buf = new byte[65536];
+            int keep = 0;
+            int read;
+            while ((read = is.read(buf, keep, buf.length - keep)) > 0) {
+                int total = keep + read;
+                search:
+                for (int i = 0; i + pattern.length <= total; i++) {
+                    for (int j = 0; j < pattern.length; j++) {
+                        if (buf[i + j] != pattern[j]) continue search;
+                    }
+                    return true;
+                }
+                keep = Math.min(total, pattern.length - 1);
+                System.arraycopy(buf, total - keep, buf, 0, keep);
+            }
+            return false;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static boolean is64BitRuntime(Runtime runtime) {
+        String arch = runtime.arch;
+        if (arch == null) return !Architecture.is32BitsDevice();
+        return arch.contains("64") || arch.contains("aarch64");
     }
 
     private static int internalGetMaxContinuousAddressSpaceSize() throws Exception{

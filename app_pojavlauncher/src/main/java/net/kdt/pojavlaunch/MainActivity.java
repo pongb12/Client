@@ -491,6 +491,9 @@ public class MainActivity extends BaseActivity implements ControlButtonMenuListe
         if (hasMods("sodium"))
             Logger.appendToLog("WARNING: Sodium is being used, Amethyst-Android does NOT support this mod, you are on your own");
         Logger.appendToLog("--------- Starting game with Launcher Debug!");
+        // Compute the effective (possibly automatic) heap allocation early so
+        // the launcher info log reflects what the game will actually get.
+        Tools.ensureEffectiveRamAllocationComputed(this);
         Tools.printLauncherInfo(versionId, Tools.isValidString(minecraftProfile.javaArgs) ? minecraftProfile.javaArgs : LauncherPreferences.PREF_CUSTOM_JAVA_ARGS, Tools.getTotalDeviceMemory(this));
         if(Tools.LOCAL_RENDERER.equals("opengles_mobileglues")) {
             LauncherPreferences.writeMGRendererSettings();

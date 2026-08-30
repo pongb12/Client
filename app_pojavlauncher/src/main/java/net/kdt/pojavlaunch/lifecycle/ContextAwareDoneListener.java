@@ -13,6 +13,7 @@ import net.kdt.pojavlaunch.lifecycle.ContextExecutor;
 import net.kdt.pojavlaunch.lifecycle.ContextExecutorTask;
 import net.kdt.pojavlaunch.progresskeeper.ProgressKeeper;
 import net.kdt.pojavlaunch.tasks.AsyncMinecraftDownloader;
+import net.kdt.pojavlaunch.utils.MemoryReleaseManager;
 import net.kdt.pojavlaunch.utils.NotificationUtils;
 
 public class ContextAwareDoneListener implements AsyncMinecraftDownloader.DoneListener, ContextExecutorTask {
@@ -44,6 +45,10 @@ public class ContextAwareDoneListener implements AsyncMinecraftDownloader.DoneLi
     @Override
     public void executeWithActivity(Activity activity) {
         try {
+            // Non-root RAM optimization: release what the launcher holds right
+            // before the :game process is created (the :launcher process kills
+            // itself right after, see below).
+            MemoryReleaseManager.releaseBeforeGameStart(activity.getApplicationContext());
             Intent gameStartIntent = createGameStartIntent(activity);
             activity.startActivity(gameStartIntent);
             activity.finish();
@@ -55,6 +60,8 @@ public class ContextAwareDoneListener implements AsyncMinecraftDownloader.DoneLi
 
     @Override
     public void executeWithApplication(Context context) {
+        // Non-root RAM optimization: same cleanup as the activity-backed path.
+        MemoryReleaseManager.releaseBeforeGameStart(context.getApplicationContext());
         Intent gameStartIntent = createGameStartIntent(context);
         // Since the game is a separate process anyway, it does not matter if it gets invoked
         // from somewhere other than the launcher activity.
