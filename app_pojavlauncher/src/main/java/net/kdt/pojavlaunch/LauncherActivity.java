@@ -217,13 +217,14 @@ public class LauncherActivity extends BaseActivity {
 
 
             }
-            // We just installed a json, we need internet + online acc to download so we add super
-            // basic detection whether lwjgl3ify assets were downloaded
+            // We just installed a json, we need internet to download so we do basic
+            // detection whether lwjgl3ify assets were downloaded. Version JSONs and
+            // libraries are served from public endpoints - no online account needed.
             try {
                 String jsonPath = LWJGL3ifyUtils.getJsonPath(LWJGL3ifyUtils.getProfileID(lwjgl3ifyJar));
                 File lwjgl3ifyClientJar = new File(jsonPath.replace(".json", ".jar"));
                 if (!lwjgl3ifyClientJar.exists()){
-                    if (mAccountSpinner.getSelectedAccount().isLocal() || !isOnline(this)){
+                    if (!isOnline(this)){
                         Tools.dialogOnUiThread(this, R.string.global_error, R.string.mc_download_failed);
                         return false;
                     }
