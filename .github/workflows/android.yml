@@ -93,6 +93,7 @@ jobs:
             echo "No signing secrets configured - generating fork keystore so the release build can sign."
             echo "For update-compatible signatures across releases, set repo secrets:"
             echo "  KEYSTORE_BASE64 (base64 of a .jks) + GPLAY_KEYSTORE_PASSWORD"
+            rm -f app_pojavlauncher/aamc_upload.jks
             keytool -genkeypair -v \
               -keystore app_pojavlauncher/aamc_upload.jks \
               -storepass amethyst-fork-release \
