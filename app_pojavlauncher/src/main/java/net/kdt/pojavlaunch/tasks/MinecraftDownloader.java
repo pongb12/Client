@@ -61,7 +61,10 @@ public class MinecraftDownloader {
 
     private static final ThreadLocal<byte[]> sThreadLocalDownloadBuffer = new ThreadLocal<>();
 
-    private boolean isLocalProfile = false;
+    // NOTE: this fork allows local (offline) profiles to download the game like
+    // any other account: version JSONs, jars, libraries and assets are served
+    // from public Mojang endpoints. Downloads are only blocked when the device
+    // itself has no internet connection.
     private boolean isOnline;
 
     /**
@@ -75,18 +78,16 @@ public class MinecraftDownloader {
                       @NonNull String realVersion,
                       @NonNull AsyncMinecraftDownloader.DoneListener listener) {
         if(activity != null){
-            isLocalProfile = Tools.isLocalProfile(activity);
             isOnline = Tools.isOnline(activity);
             Tools.switchDemo(Tools.isDemoProfile(activity));
 
         } else {
-            isLocalProfile = true;
             Tools.switchDemo(true);
         }
 
         sExecutorService.execute(() -> {
             try {
-                if(isLocalProfile || !isOnline) {
+                if(!isOnline) {
                     String versionMessage = realVersion; // Use provided version unless we find its a modded instance
 
                     // See if provided version is a modded version and if that version depends on another jar, check for presence of both jar's .json.
@@ -105,8 +106,7 @@ public class MinecraftDownloader {
 
                         listener.onDownloadDone();
                     } catch (Exception e) {
-                        String tryagain = !isOnline ? "Please ensure you have an internet connection" : "Please try again on your Microsoft Account";
-                        Tools.showErrorRemote(versionMessage + " is not currently installed. "+ tryagain, e);
+                        Tools.showErrorRemote(versionMessage + " is not currently installed. Please ensure you have an internet connection to download it.", e);
                     }
                 }else {
                 downloadGame(activity, version, realVersion);
