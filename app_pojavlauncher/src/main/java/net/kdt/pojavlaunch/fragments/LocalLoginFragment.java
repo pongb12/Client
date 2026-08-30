@@ -1,7 +1,5 @@
 package net.kdt.pojavlaunch.fragments;
 
-import static net.kdt.pojavlaunch.Tools.hasOnlineProfile;
-
 import android.content.Context;
 import android.os.Bundle;
 import android.view.View;
@@ -33,10 +31,9 @@ public class LocalLoginFragment extends Fragment {
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        // This is overkill but meh
-        if (!hasOnlineProfile()){
-            Tools.swapFragment(requireActivity(), MainMenuFragment.class, MainMenuFragment.TAG, null);
-        }
+        // Offline profile creation is always available in this fork: no licensed
+        // account required. The username-only account is created by the
+        // mcAccountSpinner MOJANG_LOGIN_TODO listener (empty password = local).
         mUsernameEditText = view.findViewById(R.id.login_edit_email);
         view.findViewById(R.id.login_button).setOnClickListener(v -> {
             if(!checkEditText()) {
