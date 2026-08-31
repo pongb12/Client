@@ -535,4 +535,15 @@
     <string name="ram_foreground_service_info">Foreground service: already built in. While the game runs, a persistent notification-backed foreground service keeps the game process out of reach of the Android low-memory killer without root.</string>
     <string name="ram_gc_unsupported_runtime">Shenandoah is not supported by the selected Java runtime (%s); using the tuned G1 profile instead.</string>
 
+    <!-- Previously hardcoded layout strings (made translatable) -->
+    <string name="auth_microsoft_account">Microsoft Account</string>
+    <string name="auth_local_account">Local account</string>
+    <string name="import_control_file_name">File name:</string>
+    <string name="keyboard_button">Keyboard</string>
+    <string name="global_copy">Copy</string>
+    <string name="global_paste">Paste</string>
+    <string name="browse_modpacks">Browse Modpacks</string>
+    <string name="import_zip_or_mrpack">Import Zip or mrpack</string>
+    <string name="profile_editor_custom_path">Custom path</string>
+
 </resources>
